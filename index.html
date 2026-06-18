@@ -152,6 +152,12 @@
             Reportes y Estadísticas
           </a>
         </li>
+        <li>
+          <a class="sidebar-menu-item" data-view="view-usuarios" id="btn-usuarios-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Gestión de Usuarios
+          </a>
+        </li>
       </ul>
       
       <div class="sidebar-footer">
@@ -380,19 +386,31 @@
 
                   <div class="form-group">
                     <label class="form-label">Descripción de la Incidencia *</label>
-                    <textarea id="req-desc" class="form-control" rows="5" placeholder="Describa el problema detalladamente para que el personal pueda evaluarlo..." required></textarea>
+                    <textarea id="req-desc" class="form-control" rows="5" placeholder="Describa el problema detalladamente para que el personal pueda evaluarlo..." maxlength="1000" required></textarea>
+                    <div id="desc-char-count" style="text-align:right; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">0 / 1000 caracteres</div>
+                    <div class="privacy-warning-desc" style="font-size:0.75rem; color:var(--danger); margin-top:6px; display:flex; align-items:center; gap:6px;">
+                      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink: 0;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                      <span><strong>RNF3:</strong> No ingresar datos médicos, nombres de pacientes/alumnos o información sensible en la descripción.</span>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Columna Derecha: Evidencia -->
                 <div style="display:flex; flex-direction:column; gap:16px;">
-                  <label class="form-label">Evidencia Fotográfica Inicial</label>
+                  <div class="form-group">
+                    <label class="form-label">Momento de la Evidencia *</label>
+                    <select id="req-momento" class="form-control" required>
+                      <option value="Inicial" selected>Inicial</option>
+                    </select>
+                  </div>
+
+                  <label class="form-label">Evidencia Fotográfica Inicial *</label>
                   
                   <div class="drag-drop-zone" id="drag-drop-zone">
                     <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"></path></svg>
                     <span class="drag-drop-title">Arrastra imágenes aquí</span>
-                    <span class="drag-drop-subtitle">O haz clic para seleccionar (Máx: 5MB)</span>
-                    <input type="file" id="req-file-input" style="display:none;" accept="image/*">
+                    <span class="drag-drop-subtitle">O haz clic para seleccionar (JPG/PNG, Máx: 10MB)</span>
+                    <input type="file" id="req-file-input" style="display:none;" accept="image/jpeg,image/png">
                     <img id="preview-evidence-img" class="preview-uploaded-image" src="" alt="Vista previa">
                   </div>
 
@@ -669,6 +687,70 @@
           </div>
         </div>
 
+        <!-- ==========================================
+             PANTALLA 11: Gestión de Usuarios (Nuevo)
+             ========================================== -->
+        <div id="view-usuarios" class="screen-view">
+          <div class="card" style="padding: 24px;">
+            <h2 style="font-weight:800; font-size:1.3rem; margin-bottom: 24px; color: var(--primary);">Gestión de Usuarios</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 32px; align-items: start;">
+              <!-- Formulario de Creación -->
+              <div class="card" style="padding: 20px; border: 1px solid var(--border-color); background-color: var(--bg-main);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:var(--primary); margin-bottom: 16px;">Crear Nuevo Usuario</h3>
+                <form id="create-user-form" style="display: flex; flex-direction: column; gap: 16px;">
+                  <div class="form-group">
+                    <label class="form-label" for="user-fullname">Nombre Completo *</label>
+                    <input type="text" id="user-fullname" class="form-control" placeholder="Ej. Juan Pérez" required>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label class="form-label" for="user-email">Correo Electrónico *</label>
+                    <input type="email" id="user-email" class="form-control" placeholder="ejemplo@institucion.edu" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="user-role">Rol *</label>
+                    <select id="user-role" class="form-control" required>
+                      <option value="Administrador">Administrador</option>
+                      <option value="Personal Operativo">Personal Operativo</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="user-password">Contraseña *</label>
+                    <input type="password" id="user-password" class="form-control" placeholder="••••••••" required>
+                  </div>
+
+                  <button type="submit" class="btn btn-primary" style="margin-top: 8px; width: 100%;">
+                    Registrar Usuario
+                  </button>
+                </form>
+              </div>
+
+              <!-- Listado de Usuarios -->
+              <div class="card" style="padding: 20px; border: 1px solid var(--border-color);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:var(--primary); margin-bottom: 16px;">Usuarios Registrados</h3>
+                <div class="table-wrapper" style="overflow-x: auto;">
+                  <table class="modern-table" style="width: 100%;">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>contrasenaHash (SHA-256)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                      <!-- Generado dinámicamente por JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
     </main>
   </div>
@@ -708,12 +790,19 @@
           </div>
 
           <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">Momento de la Evidencia *</label>
+            <select id="cierre-momento" class="form-control" required>
+              <option value="Cierre" selected>Cierre</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
             <label class="form-label">Evidencia Final de Solución (Obligatoria) *</label>
             <div class="drag-drop-zone" id="cierre-drag-drop-zone" style="padding: 24px 10px;">
               <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"></path></svg>
               <span class="drag-drop-title" style="font-size: 0.9rem;" id="cierre-drag-title">Arrastra o haz clic para subir foto</span>
-              <span class="drag-drop-subtitle" style="font-size: 0.75rem;" id="cierre-drag-subtitle">Formatos: PNG, JPG</span>
-              <input type="file" id="cierre-file-input" style="display:none;" accept="image/*">
+              <span class="drag-drop-subtitle" style="font-size: 0.75rem;" id="cierre-drag-subtitle">Formatos: PNG, JPG (Máx: 10MB)</span>
+              <input type="file" id="cierre-file-input" style="display:none;" accept="image/jpeg,image/png">
               <img id="cierre-preview-evidence-img" class="preview-uploaded-image" src="" alt="Vista previa" style="max-height: 120px;">
             </div>
           </div>

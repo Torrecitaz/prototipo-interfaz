@@ -2,9 +2,31 @@
    SaaS Dashboard JS - Prototipo Institucional
    ========================================== */
 
+// Función asíncrona para generar hash SHA-256 utilizando la API nativa de Web Crypto
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Estado global de la aplicación (en memoria)
 const AppState = {
   currentUser: null,
+  users: [
+    {
+      email: "coordinador@institucion.edu",
+      name: "Mateo Torres",
+      role: "Administrador",
+      contrasenaHash: "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" // SHA-256 de "admin123"
+    },
+    {
+      email: "juan@institucion.edu",
+      name: "Juan Pérez",
+      role: "Personal Operativo",
+      contrasenaHash: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92" // SHA-256 de "123456"
+    }
+  ],
   requirements: [
     {
       id: "REQ-001",
@@ -139,9 +161,10 @@ const TourSteps = [
     action: () => {
       // Autenticar automáticamente si no se ha hecho
       if (!AppState.currentUser) {
-        AppState.currentUser = { email: "coordinador@institucion.edu", name: "C. Coordinador", role: "Administrador" };
+        AppState.currentUser = { email: "coordinador@institucion.edu", name: "Mateo Torres", role: "Administrador" };
         document.getElementById("login-screen").style.display = "none";
         document.getElementById("sidebar-username").innerText = AppState.currentUser.name;
+        document.querySelector(".sidebar-footer .user-role").innerText = AppState.currentUser.role;
       }
       changeView("view-dashboard");
     }
@@ -353,6 +376,8 @@ function changeView(viewId) {
     renderReportsView();
   } else if (viewId === "view-aprobacion") {
     renderAprobacionView();
+  } else if (viewId === "view-usuarios") {
+    renderUsersTable();
   }
 
   // Actualizar título del header principal
@@ -369,7 +394,8 @@ function updateHeaderTitle(viewId) {
     "view-assign": "Asignación de Personal Responsable",
     "view-evidences": "Galería de Evidencias (Antes / Después)",
     "view-timeline": "Historial de Trazabilidad del Requerimiento",
-    "view-reports": "Reportes y Métricas del Sistema"
+    "view-reports": "Reportes y Métricas del Sistema",
+    "view-usuarios": "Gestión de Usuarios y Roles"
   };
   const title = titles[viewId] || "Sistema de Gestión Institucional";
   document.getElementById("main-header-title").innerText = title;
@@ -648,6 +674,16 @@ function setupCrearRequerimientoForm() {
   const dragZone = document.getElementById("drag-drop-zone");
   const fileInput = document.getElementById("req-file-input");
   const previewImg = document.getElementById("preview-evidence-img");
+  const descTextarea = document.getElementById("req-desc");
+  const charCountDiv = document.getElementById("desc-char-count");
+
+  // Character counter for description
+  if (descTextarea && charCountDiv) {
+    descTextarea.addEventListener("input", () => {
+      const len = descTextarea.value.length;
+      charCountDiv.innerText = `${len} / 1000 caracteres`;
+    });
+  }
 
   // Drag and Drop
   dragZone.addEventListener("click", () => fileInput.click());
@@ -676,6 +712,35 @@ function setupCrearRequerimientoForm() {
   });
 
   function handleFileSelected(file) {
+    // Reset error styles
+    dragZone.classList.remove("drag-error");
+    dragZone.querySelector(".drag-drop-title").style.color = "";
+    
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    const validTypes = ["image/jpeg", "image/png", "image/jpg"];
+    
+    // Check format
+    if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith(".jpg") && !file.name.toLowerCase().endsWith(".jpeg") && !file.name.toLowerCase().endsWith(".png")) {
+      dragZone.classList.add("drag-error");
+      dragZone.querySelector(".drag-drop-title").innerText = "Error: Formato no permitido. Solo JPG o PNG.";
+      dragZone.querySelector(".drag-drop-subtitle").innerText = "Por favor, elija un archivo válido.";
+      fileInput.value = "";
+      previewImg.style.display = "none";
+      AppState.uploadedEvidenceSimulated = null;
+      return;
+    }
+    
+    // Check size
+    if (file.size > maxSize) {
+      dragZone.classList.add("drag-error");
+      dragZone.querySelector(".drag-drop-title").innerText = "Error: El archivo pesa más de 10 MB.";
+      dragZone.querySelector(".drag-drop-subtitle").innerText = "Por favor, suba una imagen de menor tamaño.";
+      fileInput.value = "";
+      previewImg.style.display = "none";
+      AppState.uploadedEvidenceSimulated = null;
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       AppState.uploadedEvidenceSimulated = e.target.result;
@@ -683,7 +748,14 @@ function setupCrearRequerimientoForm() {
       previewImg.style.display = "block";
       dragZone.querySelector("svg").style.display = "none";
       dragZone.querySelector(".drag-drop-title").innerText = "Imagen cargada con éxito";
-      dragZone.querySelector(".drag-drop-subtitle").innerText = file.name;
+      
+      // Simular la copia física del archivo localmente
+      const simPath = `\\\\servidor-local\\mantenimiento\\evidencias\\inicial_${Date.now()}_${file.name}`;
+      dragZone.querySelector(".drag-drop-subtitle").innerText = `${file.name}\n💾 Copiado localmente a: ${simPath}`;
+      console.log(`[Copia Física Local] Archivo de evidencia copiado exitosamente a: ${simPath}`);
+      
+      // Guardar el path temporal
+      AppState.uploadedEvidenceSimulatedPath = simPath;
     };
     reader.readAsDataURL(file);
   }
@@ -697,14 +769,22 @@ function setupCrearRequerimientoForm() {
     const priority = document.getElementById("req-priority").value;
     const location = document.getElementById("req-location").value;
     const description = document.getElementById("req-desc").value;
+    const momento = document.getElementById("req-momento").value;
 
     if (!title || !description) {
       alert("Por favor complete los campos obligatorios.");
       return;
     }
 
+    if (description.length > 1000) {
+      alert("Error: La descripción no puede superar los 1000 caracteres.");
+      return;
+    }
+
     const nextIdNum = AppState.requirements.length + 1;
     const nextId = `REQ-00${nextIdNum}`;
+    
+    const evidencePath = AppState.uploadedEvidenceSimulatedPath || (AppState.uploadedEvidenceSimulated ? `\\\\servidor-local\\mantenimiento\\evidencias\\${nextId}_inicial.png` : null);
     
     // Crear el nuevo requerimiento
     const newReq = {
@@ -718,6 +798,8 @@ function setupCrearRequerimientoForm() {
       date: new Date().toISOString().split('T')[0],
       description: description,
       responsible: null,
+      momentoEvidencia: momento,
+      evidenceBeforePath: evidencePath,
       evidenceBefore: AppState.uploadedEvidenceSimulated || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='150' viewBox='0 0 200 150'><rect width='200' height='150' fill='%2364748B' opacity='0.15'/><rect x='10' y='10' width='180' height='130' rx='6' fill='none' stroke='%2364748B' stroke-width='2' stroke-dasharray='4 4'/></svg>",
       evidenceWork: null,
       responsibleNotes: null,
@@ -730,7 +812,7 @@ function setupCrearRequerimientoForm() {
           date: new Date().toISOString().replace('T', ' ').substring(0, 16), 
           action: "Requerimiento Creado", 
           user: AppState.currentUser ? AppState.currentUser.name : "Coordinador", 
-          desc: "Se registró el reporte en el sistema." 
+          desc: `Se registró el reporte en el sistema. Momento de Evidencia: ${momento}.${evidencePath ? ` Archivo copiado físicamente a: ${evidencePath}` : ''}`
         }
       ]
     };
@@ -739,11 +821,13 @@ function setupCrearRequerimientoForm() {
     
     // Resetear formulario
     form.reset();
+    if (charCountDiv) charCountDiv.innerText = "0 / 1000 caracteres";
     previewImg.style.display = "none";
     dragZone.querySelector("svg").style.display = "inline";
     dragZone.querySelector(".drag-drop-title").innerText = "Arrastra imágenes aquí";
-    dragZone.querySelector(".drag-drop-subtitle").innerText = "O haz clic para seleccionar (Máx: 5MB)";
+    dragZone.querySelector(".drag-drop-subtitle").innerText = "O haz clic para seleccionar (JPG/PNG, Máx: 10MB)";
     AppState.uploadedEvidenceSimulated = null;
+    AppState.uploadedEvidenceSimulatedPath = null;
 
     alert(`Requerimiento ${nextId} creado de forma exitosa.`);
     changeView("view-gestion");
@@ -1125,8 +1209,9 @@ function renderTimelineView() {
       if (req.evidenceBefore) {
         imgHTML = `
           <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px;">
-            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Evidencia Inicial:</span>
+            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Evidencia Inicial (Momento: ${req.momentoEvidencia || 'Inicial'}):</span>
             <img src="${req.evidenceBefore}" class="timeline-image-preview" alt="Evidencia Inicial" style="max-width: 200px; border-radius: 6px; border: 1px solid var(--border-color);" />
+            ${req.evidenceBeforePath ? `<div style="font-size:0.75rem; color:var(--secondary); font-weight:600; margin-top: 4px;">💾 Copia física en red local: <code>${req.evidenceBeforePath}</code></div>` : ''}
           </div>
         `;
       } else {
@@ -1149,8 +1234,9 @@ function renderTimelineView() {
       if (req.evidenceAfter) {
         imgHTML = `
           <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px;">
-            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Evidencia Final:</span>
+            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">Evidencia Final (Momento: ${req.cierreMomentoEvidencia || 'Cierre'}):</span>
             <img src="${req.evidenceAfter}" class="timeline-image-preview" alt="Evidencia Final" style="max-width: 200px; border-radius: 6px; border: 1px solid var(--border-color);" />
+            ${req.evidenceAfterPath ? `<div style="font-size:0.75rem; color:var(--secondary); font-weight:600; margin-top: 4px;">💾 Copia física en red local: <code>${req.evidenceAfterPath}</code></div>` : ''}
           </div>
         `;
       }
@@ -1280,20 +1366,31 @@ function setupGenerateReportAction() {
 // ==========================================
 function setupLoginAction() {
   const form = document.getElementById("login-form");
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     
-    const email = document.getElementById("login-email").value;
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
     
-    // Credenciales simuladas sencillas
-    AppState.currentUser = {
-      email: email || "coordinador@institucion.edu",
-      name: "C. Coordinador",
-      role: "Coordinador General"
-    };
+    // Buscar en AppState.users
+    const user = AppState.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      alert("Error: Usuario no registrado. Regístrelo en la pestaña 'Gestión de Usuarios' o use credenciales predeterminadas.");
+      return;
+    }
+    
+    // Hashing
+    const hashed = await sha256(password);
+    if (hashed !== user.contrasenaHash) {
+      alert("Error: Contraseña incorrecta.");
+      return;
+    }
+    
+    AppState.currentUser = user;
 
-    // Actualizar nombre de usuario en el menú
+    // Actualizar nombre y rol en el menú
     document.getElementById("sidebar-username").innerText = AppState.currentUser.name;
+    document.querySelector(".sidebar-footer .user-role").innerText = AppState.currentUser.role;
 
     // Redirigir al dashboard
     changeView("view-dashboard");
@@ -1418,14 +1515,52 @@ function setupCierreModalForm() {
   };
 
   function handleCierreFile(file) {
+    // Reset error styles
+    dragZone.classList.remove("drag-error");
+    document.getElementById("cierre-drag-title").style.color = "";
+    
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    const validTypes = ["image/jpeg", "image/png", "image/jpg"];
+    
+    // Check format
+    if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith(".jpg") && !file.name.toLowerCase().endsWith(".jpeg") && !file.name.toLowerCase().endsWith(".png")) {
+      dragZone.classList.add("drag-error");
+      document.getElementById("cierre-drag-title").innerText = "Error: Formato no permitido. Solo JPG o PNG.";
+      document.getElementById("cierre-drag-title").style.color = "var(--danger)";
+      document.getElementById("cierre-drag-subtitle").innerText = "Por favor, elija un archivo válido.";
+      fileInput.value = "";
+      previewImg.style.display = "none";
+      AppState.uploadedCierreEvidenceSimulated = null;
+      return;
+    }
+    
+    // Check size
+    if (file.size > maxSize) {
+      dragZone.classList.add("drag-error");
+      document.getElementById("cierre-drag-title").innerText = "Error: El archivo pesa más de 10 MB.";
+      document.getElementById("cierre-drag-title").style.color = "var(--danger)";
+      document.getElementById("cierre-drag-subtitle").innerText = "Por favor, suba una imagen de menor tamaño.";
+      fileInput.value = "";
+      previewImg.style.display = "none";
+      AppState.uploadedCierreEvidenceSimulated = null;
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       AppState.uploadedCierreEvidenceSimulated = e.target.result;
       previewImg.src = e.target.result;
       previewImg.style.display = "block";
       dragZone.querySelector("svg").style.display = "none";
-      document.getElementById("cierre-drag-title").innerText = "Evidencia final cargada";
-      document.getElementById("cierre-drag-subtitle").innerText = file.name;
+      document.getElementById("cierre-drag-title").innerText = "Evidencia final cargada con éxito";
+      
+      // Simular la copia física del archivo localmente
+      const simPath = `\\\\servidor-local\\mantenimiento\\evidencias\\cierre_${Date.now()}_${file.name}`;
+      document.getElementById("cierre-drag-subtitle").innerText = `${file.name}\n💾 Copiado localmente a: ${simPath}`;
+      console.log(`[Copia Física Local] Archivo de cierre copiado exitosamente a: ${simPath}`);
+      
+      // Guardar el path temporal
+      AppState.uploadedCierreEvidenceSimulatedPath = simPath;
     };
     reader.readAsDataURL(file);
   }
@@ -1435,6 +1570,7 @@ function setupCierreModalForm() {
     const id = document.getElementById("cierre-req-id").value;
     const observation = document.getElementById("cierre-observation").value;
     const dateVal = document.getElementById("cierre-date").value;
+    const momento = document.getElementById("cierre-momento").value;
     
     if (!AppState.uploadedCierreEvidenceSimulated) {
       alert("La evidencia fotográfica de solución es obligatoria para cerrar la incidencia.");
@@ -1443,8 +1579,12 @@ function setupCierreModalForm() {
 
     const req = AppState.requirements.find(r => r.id === id);
     if (req) {
+      const evidencePath = AppState.uploadedCierreEvidenceSimulatedPath || `\\\\servidor-local\\mantenimiento\\evidencias\\${id}_cierre.png`;
+      
       req.status = "Resuelto";
       req.evidenceAfter = AppState.uploadedCierreEvidenceSimulated;
+      req.cierreMomentoEvidencia = momento;
+      req.evidenceAfterPath = evidencePath;
       req.closeNotes = observation;
       req.closeDate = dateVal;
       
@@ -1453,17 +1593,96 @@ function setupCierreModalForm() {
         date: `${dateVal} ${timeStr}`,
         action: "Requerimiento Resuelto",
         user: AppState.currentUser ? AppState.currentUser.name : "Coordinador",
-        desc: `Cierre de incidencia: ${observation}`
+        desc: `Cierre de incidencia: ${observation}. Momento de Evidencia: ${momento}.${evidencePath ? ` Archivo copiado físicamente a: ${evidencePath}` : ''}`
       });
 
       closeCierreModal();
       alert(`Requerimiento ${id} ha sido resuelto y cerrado exitosamente.`);
+      
+      // Reset variables
+      AppState.uploadedCierreEvidenceSimulated = null;
+      AppState.uploadedCierreEvidenceSimulatedPath = null;
       
       renderAprobacionView();
       updateDashboard();
       renderRequirementsTable();
     }
   };
+}
+
+// ==========================================
+// PANTALLA 11: Gestión de Usuarios Lógica
+// ==========================================
+function renderUsersTable() {
+  const tableBody = document.getElementById("users-table-body");
+  if (!tableBody) return;
+  tableBody.innerHTML = "";
+  
+  AppState.users.forEach(user => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="font-weight:600;">${user.name}</td>
+      <td>${user.email}</td>
+      <td><span class="badge ${user.role === 'Administrador' ? 'badge-alta' : 'badge-proceso'}">${user.role}</span></td>
+      <td style="font-family: monospace; font-size: 0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${user.contrasenaHash}">
+        ${user.contrasenaHash}
+      </td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}
+
+function setupCreateUserForm() {
+  const form = document.getElementById("create-user-form");
+  if (!form) return;
+  
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById("user-fullname").value.trim();
+    const email = document.getElementById("user-email").value.trim();
+    const role = document.getElementById("user-role").value;
+    const password = document.getElementById("user-password").value;
+    
+    if (!name || !email || !role || !password) {
+      alert("Por favor complete todos los campos obligatorios.");
+      return;
+    }
+    
+    // Validar duplicado
+    if (AppState.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+      alert("Error: Este correo electrónico ya está registrado.");
+      return;
+    }
+    
+    // Encriptar contraseña en el Frontend usando SHA-256
+    const contrasenaHash = await sha256(password);
+    
+    // Crear usuario
+    const newUser = {
+      name,
+      email,
+      role,
+      contrasenaHash
+    };
+    
+    AppState.users.push(newUser);
+    
+    // Si el usuario es un Personal Operativo, agregarlo a la lista de staff técnico
+    if (role === "Personal Operativo") {
+      AppState.staff.push({
+        name: name,
+        specialty: "Técnico General",
+        avatar: name.split(" ").map(n => n[0]).join("").toUpperCase()
+      });
+    }
+    
+    // Resetear formulario
+    form.reset();
+    
+    alert(`Usuario ${name} registrado con éxito.\nContraseña encriptada en Frontend (SHA-256):\n${contrasenaHash}`);
+    renderUsersTable();
+  });
 }
 
 function renderAprobacionView() {
@@ -1705,6 +1924,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupGenerateReportAction();
   initGestionFilters();
   setupCierreModalForm();
+  setupCreateUserForm();
 
   // Escuchar clics en el sidebar
   const menuItems = document.querySelectorAll(".sidebar-menu-item");

@@ -1648,4 +1648,16 @@ body {
   color: var(--secondary);
 }
 
+/* Estilos para errores de carga de archivos en el drag-drop */
+.drag-drop-zone.drag-error {
+  border-color: var(--danger) !important;
+  background-color: var(--danger-light) !important;
+}
+.drag-drop-zone.drag-error svg {
+  color: var(--danger) !important;
+}
+.drag-drop-zone.drag-error .drag-drop-title {
+  color: var(--danger) !important;
+}
+
 /* Fin de la hoja de estilos */
